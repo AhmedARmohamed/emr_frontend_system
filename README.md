@@ -43,7 +43,7 @@ A comprehensive React-based Electronic Medical Records (EMR) system for multi-fa
    ```
 
 4. **Access the application**
-   - Open http://localhost:5173 in your browser
+   - Open http://localhost:3000 in your browser
    - Use demo credentials: `admin/password`
 
 ## 🛠 Technology Stack
