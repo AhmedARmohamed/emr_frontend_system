@@ -1,5 +1,5 @@
 export interface Patient {
-  id?: string;
+  id?: number;
   mrn: string;
   firstName: string;
   lastName: string;
@@ -10,14 +10,14 @@ export interface Patient {
   address: string;
   insuranceProvider?: string;
   insurancePolicyNumber?: string;
-  facilityId: string;
+  facilityId: number;
   services: string[];
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface Facility {
-  id: string;
+  id: number;
   name: string;
   address: string;
   phoneNumber: string;

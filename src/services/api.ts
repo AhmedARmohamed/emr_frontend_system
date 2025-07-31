@@ -1,7 +1,8 @@
 import axios from 'axios';
-import { Patient, Facility, Service, LoginCredentials, ApiResponse } from '../types';
+import { Patient, Facility, Service, ApiResponse } from '../types';
+import keycloak from './keycloak';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'http://localhost:8080';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -12,7 +13,7 @@ const api = axios.create({
 
 // Request interceptor to add auth token
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('authToken');
+  const token = keycloak.token || localStorage.getItem('authToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -24,38 +25,36 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+      // Token expired, try to refresh
+      if (keycloak.authenticated) {
+        keycloak.updateToken(5).catch(() => {
+          keycloak.login();
+        });
+      } else {
+        keycloak.login();
+      }
     }
     return Promise.reject(error);
   }
 );
 
-export const authAPI = {
-  login: async (credentials: LoginCredentials): Promise<ApiResponse<{ token: string; user: any }>> => {
-    const response = await api.post('/auth/login', credentials);
-    return response.data;
-  },
-  
-  register: async (userData: any): Promise<ApiResponse<any>> => {
-    const response = await api.post('/auth/register', userData);
-    return response.data;
-  },
-  
-  getCurrentUser: async (): Promise<ApiResponse<any>> => {
-    const response = await api.get('/auth/me');
-    return response.data;
-  }
-};
-
 export const patientAPI = {
-  getAll: async (facilityId?: string): Promise<ApiResponse<Patient[]>> => {
-    const params = facilityId ? { facilityId } : {};
-    const response = await api.get('/patients', { params });
-    return response.data;
+  getAll: async (facilityId?: number): Promise<ApiResponse<Patient[]>> => {
+    const response = await api.get('/patients/search', {
+      params: { 
+        facilityId: facilityId || 1, 
+        page: 0, 
+        size: 100 
+      }
+    });
+    // Transform PageResponse to simple array
+    return {
+      ...response.data,
+      data: response.data.data.content || []
+    };
   },
   
-  getById: async (id: string): Promise<ApiResponse<Patient>> => {
+  getById: async (id: number): Promise<ApiResponse<Patient>> => {
     const response = await api.get(`/patients/${id}`);
     return response.data;
   },
@@ -65,19 +64,30 @@ export const patientAPI = {
     return response.data;
   },
   
-  update: async (id: string, patient: Partial<Patient>): Promise<ApiResponse<Patient>> => {
+  update: async (id: number, patient: Partial<Patient>): Promise<ApiResponse<Patient>> => {
     const response = await api.put(`/patients/${id}`, patient);
     return response.data;
   },
   
-  delete: async (id: string): Promise<ApiResponse<void>> => {
+  delete: async (id: number): Promise<ApiResponse<void>> => {
     const response = await api.delete(`/patients/${id}`);
     return response.data;
   },
   
   search: async (query: string): Promise<ApiResponse<Patient[]>> => {
-    const response = await api.get(`/patients/search?q=${encodeURIComponent(query)}`);
-    return response.data;
+    const response = await api.get('/patients/search', {
+      params: { 
+        facilityId: 1, 
+        search: query, 
+        page: 0, 
+        size: 100 
+      }
+    });
+    // Transform PageResponse to simple array
+    return {
+      ...response.data,
+      data: response.data.data.content || []
+    };
   }
 };
 
@@ -87,7 +97,7 @@ export const facilityAPI = {
     return response.data;
   },
   
-  getById: async (id: string): Promise<ApiResponse<Facility>> => {
+  getById: async (id: number): Promise<ApiResponse<Facility>> => {
     const response = await api.get(`/facilities/${id}`);
     return response.data;
   },
@@ -97,12 +107,12 @@ export const facilityAPI = {
     return response.data;
   },
   
-  update: async (id: string, facility: Partial<Facility>): Promise<ApiResponse<Facility>> => {
+  update: async (id: number, facility: Partial<Facility>): Promise<ApiResponse<Facility>> => {
     const response = await api.put(`/facilities/${id}`, facility);
     return response.data;
   },
   
-  delete: async (id: string): Promise<ApiResponse<void>> => {
+  delete: async (id: number): Promise<ApiResponse<void>> => {
     const response = await api.delete(`/facilities/${id}`);
     return response.data;
   }
@@ -110,13 +120,41 @@ export const facilityAPI = {
 
 export const serviceAPI = {
   getAll: async (): Promise<ApiResponse<Service[]>> => {
-    const response = await api.get('/services');
-    return response.data;
+    // Mock services since your backend doesn't have this endpoint yet
+    return {
+      success: true,
+      data: [
+        {
+          id: '1',
+          name: 'Blood Test',
+          type: 'LAB' as const,
+          description: 'Complete blood count and analysis',
+          price: 50
+        },
+        {
+          id: '2',
+          name: 'X-Ray',
+          type: 'RADIOLOGY' as const,
+          description: 'Digital X-ray imaging',
+          price: 100
+        },
+        {
+          id: '3',
+          name: 'General Consultation',
+          type: 'CONSULTATION' as const,
+          description: 'General medical consultation',
+          price: 75
+        }
+      ]
+    };
   },
   
   getByType: async (type: string): Promise<ApiResponse<Service[]>> => {
-    const response = await api.get(`/services?type=${type}`);
-    return response.data;
+    const allServices = await serviceAPI.getAll();
+    return {
+      ...allServices,
+      data: allServices.data.filter(service => service.type === type)
+    };
   }
 };
 
